@@ -8,23 +8,31 @@ Create and manage Docker development environments with a single command.
 npm install -g
 ```
 
-## Usage
+## Quick Start
 
-### Initialize a new Docker environment
+### 1. Install Docker
+
+```bash
+docker-env-init install          # Auto-select mirror
+docker-env-init install cn       # Use China mirror
+docker-env-init install aliyun   # Use Aliyun mirror
+```
+
+### 2. Initialize a new Docker environment
 
 ```bash
 docker-env-init init [directory]
 # Default: creates ./docker-env
 ```
 
-### Switch Ubuntu version
+### 3. Switch Ubuntu version
 
 ```bash
 docker-env-init use 22.04
 docker-env-init current
 ```
 
-### Container management
+### 4. Container management
 
 ```bash
 docker-env-init build    # Build images
@@ -34,12 +42,18 @@ docker-env-init run      # Start container (foreground)
 docker-env-init exec     # Enter running container
 ```
 
-### Custom configurations
+### 5. Custom configurations
 
 ```bash
 docker-env-init create myproject    # Create custom compose file
 docker-env-init switch myproject.yml # Switch to custom config
 docker-env-init list                # List available configs
+```
+
+### 6. Check environment
+
+```bash
+docker-env-init doctor    # Check Docker installation status
 ```
 
 ## Available Ubuntu Versions
@@ -48,9 +62,20 @@ docker-env-init list                # List available configs
 - 22.04
 - 24.04
 
+## Available Docker Mirrors
+
+- `cn` - China mirror
+- `aliyun` - Alibaba Cloud mirror
+- `azure` - Azure China mirror
+- `tencent` - Tencent Cloud mirror
+- `netease` - NetEase mirror
+
 ## Example Workflow
 
 ```bash
+# Install Docker (if not installed)
+docker-env-init install cn
+
 # Create new environment
 docker-env-init init my-project
 cd my-project

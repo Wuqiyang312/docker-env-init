@@ -154,6 +154,7 @@ Usage: docker-env-init <command> [options]
 
 Commands:
   init [dir]          Create docker-env template in directory (default: docker-env)
+  install [mirror]    Install Docker (optional: cn|aliyun|azure|tencent|netease)
   use <version>       Switch to specific Ubuntu version
   current             Show current active version
   build               Build images (uses current docker-compose.yml)
@@ -164,18 +165,93 @@ Commands:
   create <name>       Create custom docker-compose.yml from template
   list                List all available compose files
   switch <file>       Switch to custom compose file
+  doctor              Check Docker installation status
   help                Show this help message
 
 Available versions: ${AVAILABLE_VERSIONS.join(' ')}
+Available mirrors: cn, aliyun, azure, tencent, netease
 
 Examples:
+  docker-env-init install              # Use default mirror
+  docker-env-init install cn           # Use China mirror
   docker-env-init init my-docker-env
   docker-env-init use 22.04
   docker-env-init build
   docker-env-init up
-  docker-env-init create myproject
-  docker-env-init switch docker-compose.custom.yml
 `);
+}
+
+function cmdInstall(mirror) {
+  const validMirrors = ['cn', 'aliyun', 'azure', 'tencent', 'netease'];
+  
+  if (mirror && !validMirrors.includes(mirror)) {
+    console.error(`Error: Invalid mirror '${mirror}'`);
+    console.error(`Available mirrors: ${validMirrors.join(', ')}`);
+    process.exit(1);
+  }
+
+  console.log('Installing Docker...');
+  console.log(`Mirror: ${mirror || 'default (auto-select)'}`);
+  console.log('');
+
+  const url = 'https://linuxmirrors.cn/docker.sh';
+  const script = `bash <(curl -sSL ${url})${mirror ? ` --mirror ${mirror}` : ''}`;
+  
+  console.log(`Executing: ${script}`);
+  console.log('');
+  
+  try {
+    execSync(`bash <(curl -sSL ${url})${mirror ? ` --mirror ${mirror}` : ''}`, {
+      stdio: 'inherit',
+      env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' }
+    });
+    console.log('');
+    console.log('✓ Docker installed successfully');
+  } catch (e) {
+    console.error('Failed to install Docker');
+    process.exit(1);
+  }
+}
+
+function cmdDoctor() {
+  console.log('Docker Environment Check\n');
+  
+  // Check docker command
+  try {
+    const dockerVersion = execSync('docker --version', { encoding: 'utf8' }).trim();
+    console.log(`✓ Docker: ${dockerVersion}`);
+  } catch (e) {
+    console.log('✗ Docker: not installed');
+    console.log('  Run: docker-env-init install');
+  }
+  
+  // Check docker-compose
+  try {
+    const composeVersion = execSync('docker-compose --version', { encoding: 'utf8' }).trim();
+    console.log(`✓ docker-compose: ${composeVersion}`);
+  } catch (e) {
+    console.log('✗ docker-compose: not installed');
+  }
+  
+  // Check docker daemon
+  try {
+    execSync('docker info', { stdio: 'ignore' });
+    console.log('✓ Docker daemon: running');
+  } catch (e) {
+    console.log('✗ Docker daemon: not running');
+  }
+  
+  // Check user in docker group
+  try {
+    const groups = execSync('groups', { encoding: 'utf8' });
+    if (groups.includes('docker')) {
+      console.log('✓ Docker group: user is member');
+    } else {
+      console.log('✗ Docker group: user not member (may need sudo)');
+    }
+  } catch (e) {
+    console.log('✗ Docker group: check failed');
+  }
 }
 
 function cmdInit(dir = 'docker-env') {
@@ -432,6 +508,9 @@ async function main() {
   const command = process.argv[2];
 
   switch (command) {
+    case 'install':
+      cmdInstall(process.argv[3]);
+      break;
     case 'init':
       cmdInit(process.argv[3] || 'docker-env');
       break;
@@ -440,6 +519,9 @@ async function main() {
       break;
     case 'current':
       cmdCurrent();
+      break;
+    case 'doctor':
+      cmdDoctor();
       break;
     case 'build':
       cmdBuild();
