@@ -15,56 +15,97 @@ npm install -g
 ```bash
 docker-env-init install          # Auto-select mirror
 docker-env-init install cn       # Use China mirror
-docker-env-init install aliyun   # Use Aliyun mirror
 ```
 
 ### 2. Initialize a new Docker environment
 
 ```bash
-docker-env-init init [directory]
-# Default: creates ./docker-env
+docker-env-init init my-project
+cd my-project
 ```
 
-### 3. Switch Ubuntu version
+### 3. Select version and start
 
 ```bash
 docker-env-init use 22.04
-docker-env-init current
+docker-env-init up
+docker-env-init exec
 ```
 
-### 4. Container management
+## Commands
+
+### Environment Management
+
+| Command | Description |
+|---------|-------------|
+| `init [dir]` | Create docker-env template |
+| `init <dir> -s <system>` | Create with specific template system |
+| `use <version>` | Switch to specific version |
+| `current` | Show current active version |
+| `list` | List available compose files |
+
+### Container Management
+
+| Command | Description |
+|---------|-------------|
+| `build` | Build images |
+| `up` | Start container (detached) |
+| `down` | Stop container |
+| `run` | Start container (foreground) |
+| `exec` | Enter running container |
+
+### Templates
+
+| Command | Description |
+|---------|-------------|
+| `templates` | List available template systems |
+| `create <name>` | Create custom compose file |
+| `switch <file>` | Switch to custom compose file |
+
+### System
+
+| Command | Description |
+|---------|-------------|
+| `install [mirror]` | Install Docker |
+| `doctor` | Check Docker environment |
+| `help` | Show help message |
+
+## Template Systems
+
+### Built-in Templates
+
+- `ubuntu` - Ubuntu 20.04, 22.04, 24.04
+
+### Custom Templates
+
+Create custom templates in `~/.docker-env-init/templates/`:
 
 ```bash
-docker-env-init build    # Build images
-docker-env-init up       # Start container (detached)
-docker-env-init down     # Stop container
-docker-env-init run      # Start container (foreground)
-docker-env-init exec     # Enter running container
+# Create a new template system
+mkdir -p ~/.docker-env-init/templates/my-env
+cp templates/ubuntu/* ~/.docker-env-init/templates/my-env/
+
+# Edit the templates as needed
+vim ~/.docker-env-init/templates/my-env/Dockerfile
+
+# Use your custom template
+docker-env-init init my-project -s my-env
 ```
 
-### 5. Custom configurations
+### Template Structure
 
-```bash
-docker-env-init create myproject    # Create custom compose file
-docker-env-init switch myproject.yml # Switch to custom config
-docker-env-init list                # List available configs
 ```
-
-### 6. Check environment
-
-```bash
-docker-env-init doctor    # Check Docker installation status
+templates/
+└── <system-name>/
+    ├── Dockerfile           # Default Dockerfile
+    ├── Dockerfile.<version> # Version-specific Dockerfiles
+    ├── docker-compose.<version>.yml  # Compose files
+    └── README.md            # Optional template info
 ```
-
-## Available Ubuntu Versions
-
-- 20.04
-- 22.04
-- 24.04
 
 ## Available Docker Mirrors
 
-- `cn` - China mirror
+- `cn` - Official China mirror
 - `aliyun` - Alibaba Cloud mirror
 - `azure` - Azure China mirror
 - `tencent` - Tencent Cloud mirror
@@ -73,22 +114,32 @@ docker-env-init doctor    # Check Docker installation status
 ## Example Workflow
 
 ```bash
-# Install Docker (if not installed)
+# Install Docker
 docker-env-init install cn
 
-# Create new environment
+# Check environment
+docker-env-init doctor
+
+# Create new environment with default template
 docker-env-init init my-project
 cd my-project
 
-# Select Ubuntu version
-docker-env-init use 22.04
+# Or use a specific template system
+docker-env-init init my-project -s ubuntu
 
-# Build and start container
+# Select version
+docker-env-init use 22.04
+docker-env-init current
+
+# Build and start
 docker-env-init build
 docker-env-init up
 
 # Enter container
 docker-env-init exec
+
+# When done
+docker-env-init down
 ```
 
 ## License
