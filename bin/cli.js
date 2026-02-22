@@ -8,6 +8,27 @@ const SCRIPT_DIR = process.env.INIT_CWD || process.cwd();
 const COMPOSE_FILE = 'docker-compose.yml';
 const AVAILABLE_VERSIONS = ['20.04', '22.04', '24.04'];
 
+let DOCKER_COMPOSE_CMD = null;
+
+function getDockerComposeCommand() {
+  if (DOCKER_COMPOSE_CMD) return DOCKER_COMPOSE_CMD;
+  
+  try {
+    execSync('docker compose version', { stdio: 'ignore' });
+    DOCKER_COMPOSE_CMD = 'docker compose';
+    return DOCKER_COMPOSE_CMD;
+  } catch (e) {
+    try {
+      execSync('docker-compose --version', { stdio: 'ignore' });
+      DOCKER_COMPOSE_CMD = 'docker-compose';
+      return DOCKER_COMPOSE_CMD;
+    } catch (e2) {
+      DOCKER_COMPOSE_CMD = 'docker compose';
+      return DOCKER_COMPOSE_CMD;
+    }
+  }
+}
+
 const templates = {
   'Dockerfile': `FROM ubuntu:22.04
 
@@ -216,7 +237,8 @@ function cmdInstall(mirror) {
 function cmdDoctor() {
   console.log('Docker Environment Check\n');
   
-  // Check docker command
+  let hasCompose = false;
+  
   try {
     const dockerVersion = execSync('docker --version', { encoding: 'utf8' }).trim();
     console.log(`✓ Docker: ${dockerVersion}`);
@@ -225,15 +247,24 @@ function cmdDoctor() {
     console.log('  Run: docker-env-init install');
   }
   
-  // Check docker-compose
   try {
-    const composeVersion = execSync('docker-compose --version', { encoding: 'utf8' }).trim();
-    console.log(`✓ docker-compose: ${composeVersion}`);
+    const composeVersion = execSync('docker compose version', { encoding: 'utf8' }).trim();
+    console.log(`✓ docker compose: ${composeVersion}`);
+    hasCompose = true;
   } catch (e) {
-    console.log('✗ docker-compose: not installed');
+    try {
+      const composeVersion = execSync('docker-compose --version', { encoding: 'utf8' }).trim();
+      console.log(`✓ docker-compose: ${composeVersion} (legacy)`);
+      hasCompose = true;
+    } catch (e2) {
+      console.log('✗ docker compose: not installed');
+    }
   }
   
-  // Check docker daemon
+  if (!hasCompose) {
+    console.log('  Note: docker compose is bundled with Docker Desktop / Docker Engine 20.10+');
+  }
+  
   try {
     execSync('docker info', { stdio: 'ignore' });
     console.log('✓ Docker daemon: running');
@@ -241,7 +272,6 @@ function cmdDoctor() {
     console.log('✗ Docker daemon: not running');
   }
   
-  // Check user in docker group
   try {
     const groups = execSync('groups', { encoding: 'utf8' });
     if (groups.includes('docker')) {
@@ -496,7 +526,8 @@ function runDockerCompose(command, args = [], options = {}) {
     process.exit(1);
   }
 
-  const cmd = `docker-compose -f "${composePath}" ${command} ${args.join(' ')}`;
+  const composeCmd = getDockerComposeCommand();
+  const cmd = `${composeCmd} -f "${composePath}" ${command} ${args.join(' ')}`;
   try {
     execSync(cmd, { stdio: 'inherit', ...options });
   } catch (e) {
