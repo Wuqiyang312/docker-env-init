@@ -3,10 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const templateLoader = require('../lib/template-loader');
 
 const SCRIPT_DIR = process.env.INIT_CWD || process.cwd();
 const COMPOSE_FILE = 'docker-compose.yml';
-const AVAILABLE_VERSIONS = ['20.04', '22.04', '24.04'];
 
 let DOCKER_COMPOSE_CMD = null;
 
@@ -29,154 +29,18 @@ function getDockerComposeCommand() {
   }
 }
 
-const templates = {
-  'Dockerfile': `FROM ubuntu:22.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
-
-RUN apt-get update && apt-get install -y \\
-    build-essential \\
-    cmake \\
-    make \\
-    git \\
-    vim \\
-    curl \\
-    wget \\
-    pkg-config \\
-    libssl-dev \\
-    gdb \\
-    && rm -rf /var/lib/apt/lists/* \\
-    && apt-get clean
-
-WORKDIR /workspace
-
-CMD ["bash"]
-`,
-  'Dockerfile.20.04': `FROM ubuntu:20.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
-
-RUN apt-get update && apt-get install -y \\
-    build-essential \\
-    cmake \\
-    make \\
-    git \\
-    vim \\
-    curl \\
-    wget \\
-    pkg-config \\
-    libssl-dev \\
-    gdb \\
-    && rm -rf /var/lib/apt/lists/* \\
-    && apt-get clean
-
-WORKDIR /workspace
-
-CMD ["bash"]
-`,
-  'Dockerfile.22.04': `FROM ubuntu:22.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
-
-RUN apt-get update && apt-get install -y \\
-    build-essential \\
-    cmake \\
-    make \\
-    git \\
-    vim \\
-    curl \\
-    wget \\
-    pkg-config \\
-    libssl-dev \\
-    gdb \\
-    && rm -rf /var/lib/apt/lists/* \\
-    && apt-get clean
-
-WORKDIR /workspace
-
-CMD ["bash"]
-`,
-  'Dockerfile.24.04': `FROM ubuntu:24.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
-
-RUN apt-get update && apt-get install -y \\
-    build-essential \\
-    cmake \\
-    make \\
-    git \\
-    vim \\
-    curl \\
-    wget \\
-    pkg-config \\
-    libssl-dev \\
-    gdb \\
-    && rm -rf /var/lib/apt/lists/* \\
-    && apt-get clean
-
-WORKDIR /workspace
-
-CMD ["bash"]
-`,
-  'docker-compose.20.04.yml': `version: '3.8'
-
-services:
-  compile-env:
-    build:
-      context: .
-      dockerfile: Dockerfile.20.04
-    image: ubuntu-compile-env:20.04
-    container_name: dev-container-20.04
-    volumes:
-      - ../workspace:/workspace
-    working_dir: /workspace
-    stdin_open: true
-    tty: true
-`,
-  'docker-compose.22.04.yml': `version: '3.8'
-
-services:
-  compile-env:
-    build:
-      context: .
-      dockerfile: Dockerfile.22.04
-    image: ubuntu-compile-env:22.04
-    container_name: dev-container-22.04
-    volumes:
-      - ../workspace:/workspace
-    working_dir: /workspace
-    stdin_open: true
-    tty: true
-`,
-  'docker-compose.24.04.yml': `version: '3.8'
-
-services:
-  compile-env:
-    build:
-      context: .
-      dockerfile: Dockerfile.24.04
-    image: ubuntu-compile-env:24.04
-    container_name: dev-container-24.04
-    volumes:
-      - ../workspace:/workspace
-    working_dir: /workspace
-    stdin_open: true
-    tty: true
-`
-};
-
 function showUsage() {
+  const systems = templateLoader.getSystemNames();
+  const versions = templateLoader.getVersions('ubuntu') || [];
+  
   console.log(`
 Usage: docker-env-init <command> [options]
 
 Commands:
   init [dir]          Create docker-env template in directory (default: docker-env)
+  init <dir> -s <system>  Create with specific system template
   install [mirror]    Install Docker (optional: cn|aliyun|azure|tencent|netease)
-  use <version>       Switch to specific Ubuntu version
+  use <version>       Switch to specific version
   current             Show current active version
   build               Build images (uses current docker-compose.yml)
   up                  Start container in detached mode
@@ -186,19 +50,23 @@ Commands:
   create <name>       Create custom docker-compose.yml from template
   list                List all available compose files
   switch <file>       Switch to custom compose file
+  templates           List available template systems
   doctor              Check Docker installation status
   help                Show this help message
 
-Available versions: ${AVAILABLE_VERSIONS.join(' ')}
+Available systems: ${systems.join(', ')}
+Available versions: ${versions.join(', ')}
 Available mirrors: cn, aliyun, azure, tencent, netease
 
 Examples:
   docker-env-init install              # Use default mirror
   docker-env-init install cn           # Use China mirror
   docker-env-init init my-docker-env
+  docker-env-init init my-env -s ubuntu
   docker-env-init use 22.04
   docker-env-init build
   docker-env-init up
+  docker-env-init templates
 `);
 }
 
@@ -284,60 +152,58 @@ function cmdDoctor() {
   }
 }
 
-function cmdInit(dir = 'docker-env') {
+function cmdTemplates() {
+  console.log('Available template systems:\n');
+  
+  const templates = templateLoader.getTemplates();
+  
+  if (templates.length === 0) {
+    console.log('  (no templates found)');
+    console.log('\nCreate custom templates in:');
+    console.log(`  ${path.join(process.env.HOME || '~', '.docker-env-init', 'templates')}`);
+    return;
+  }
+  
+  templates.forEach(t => {
+    const versions = Array.from(t.versions).join(', ') || 'default';
+    const marker = t.isCustom ? ' (custom)' : '';
+    console.log(`  ${t.name}${marker}`);
+    console.log(`    Versions: ${versions}`);
+    console.log(`    Files: ${t.files.size}`);
+  });
+}
+
+function cmdInit(dir = 'docker-env', system = 'ubuntu') {
   if (fs.existsSync(dir)) {
     console.error(`Error: ${dir} already exists!`);
     process.exit(1);
   }
 
+  const template = templateLoader.getTemplate(system);
+  if (!template) {
+    console.error(`Error: Template '${system}' not found`);
+    console.error(`Available systems: ${templateLoader.getSystemNames().join(', ')}`);
+    process.exit(1);
+  }
+
   fs.mkdirSync(dir, { recursive: true });
 
-  Object.entries(templates).forEach(([filename, content]) => {
+  template.files.forEach((content, filename) => {
     fs.writeFileSync(path.join(dir, filename), content);
     console.log(`Created ${filename}`);
   });
 
   const switchShPath = path.join(dir, 'switch.sh');
-  fs.writeFileSync(switchShPath, getSwitchShTemplate());
+  fs.writeFileSync(switchShPath, templateLoader.getSwitchShTemplate());
   fs.chmodSync(switchShPath, '755');
   console.log('Created switch.sh');
 
   console.log(`\n✓ docker-env template created in ${dir}/`);
+  console.log(`  System: ${system}${template.isCustom ? ' (custom)' : ''}`);
   console.log(`\nUsage:`);
   console.log(`  cd ${dir}`);
-  console.log(`  docker-env-init use 22.04`);
+  console.log(`  docker-env-init use ${template.defaultVersion || '22.04'}`);
   console.log(`  docker-env-init up`);
-}
-
-function getSwitchShTemplate() {
-  return `#!/bin/bash
-
-VERSION=$1
-
-if [ -z "$VERSION" ]; then
-    echo "Usage: ./switch.sh <20.04|22.04|24.04>"
-    exit 1
-fi
-
-DOCKER_FILE="Dockerfile.$VERSION"
-COMPOSE_FILE="docker-compose.$VERSION.yml"
-
-if [ ! -f "$DOCKER_FILE" ]; then
-    echo "Error: Dockerfile for version $VERSION not found"
-    exit 1
-fi
-
-if [ ! -f "$COMPOSE_FILE" ]; then
-    echo "Error: docker-compose file for version $VERSION not found"
-    exit 1
-fi
-
-cp "$DOCKER_FILE" Dockerfile
-cp "$COMPOSE_FILE" docker-compose.yml
-
-echo "Switched to Ubuntu $VERSION"
-echo "Run 'docker-compose up -d' to start the container"
-`;
 }
 
 function cmdUse(version) {
@@ -350,6 +216,7 @@ function cmdUse(version) {
   const composeFile = path.join(SCRIPT_DIR, `docker-compose.${version}.yml`);
   if (!fs.existsSync(composeFile)) {
     console.error(`Error: docker-compose.${version}.yml not found`);
+    console.error('Run \'docker-env-init list\' to see available versions');
     process.exit(1);
   }
 
@@ -536,17 +403,29 @@ function runDockerCompose(command, args = [], options = {}) {
 }
 
 async function main() {
-  const command = process.argv[2];
+  const args = process.argv.slice(2);
+  const command = args[0];
+
+  const flagIndex = args.findIndex(arg => arg === '-s' || arg === '--system');
+  let system = 'ubuntu';
+  
+  if (flagIndex !== -1 && args[flagIndex + 1]) {
+    system = args[flagIndex + 1];
+    args.splice(flagIndex, 2);
+  }
 
   switch (command) {
     case 'install':
-      cmdInstall(process.argv[3]);
+      cmdInstall(args[1]);
       break;
     case 'init':
-      cmdInit(process.argv[3] || 'docker-env');
+      cmdInit(args[1] || 'docker-env', system);
+      break;
+    case 'templates':
+      cmdTemplates();
       break;
     case 'use':
-      cmdUse(process.argv[3]);
+      cmdUse(args[1]);
       break;
     case 'current':
       cmdCurrent();
@@ -570,13 +449,13 @@ async function main() {
       cmdExec();
       break;
     case 'create':
-      await cmdCreate(process.argv[3]);
+      await cmdCreate(args[1]);
       break;
     case 'list':
       cmdList();
       break;
     case 'switch':
-      cmdSwitch(process.argv[3]);
+      cmdSwitch(args[1]);
       break;
     case 'help':
     case '--help':

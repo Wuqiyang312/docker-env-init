@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  compile-env:
+    build:
+      context: .
+      dockerfile: Dockerfile.22.04
+    image: ubuntu-compile-env:22.04
+    container_name: dev-container-22.04
+    volumes:
+      - ../workspace:/workspace
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
