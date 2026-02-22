@@ -1,0 +1,15 @@
+{
+  "name": "docker-env-init",
+  "version": "1.0.0",
+  "description": "Create docker-env templates with a single command",
+  "main": "index.js",
+  "bin": {
+    "docker-env-init": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["docker", "env", "init", "template"],
+  "author": "",
+  "license": "MIT"
+}
