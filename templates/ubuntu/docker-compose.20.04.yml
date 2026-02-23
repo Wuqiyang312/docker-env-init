@@ -1,14 +1,19 @@
-version: '3.8'
-
 services:
   compile-env:
     build:
       context: .
       dockerfile: Dockerfile.20.04
+      args:
+        - HOST_UID=${HOST_UID:-1000}
+        - HOST_GID=${HOST_GID:-1000}
     image: ubuntu-compile-env:20.04
     container_name: dev-container-20.04
     volumes:
-      - ../workspace:/workspace
+      - ..:/workspace
     working_dir: /workspace
+    environment:
+      - TZ=Asia/Shanghai
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
     stdin_open: true
     tty: true

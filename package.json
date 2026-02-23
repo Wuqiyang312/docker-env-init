@@ -1,6 +1,6 @@
 {
   "name": "docker-env-init",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "description": "Create docker-env templates with a single command",
   "main": "index.js",
   "bin": {
@@ -10,6 +10,14 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["docker", "env", "init", "template"],
-  "author": "",
-  "license": "MIT"
+  "author": "wuqiyang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wuqiyang/linuxsdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wuqiyang/linuxsdk/issues"
+  },
+  "homepage": "https://github.com/wuqiyang/linuxsdk#readme"
 }
