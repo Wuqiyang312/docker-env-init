@@ -1,0 +1,8 @@
+*.git
+*.repo
+node_modules/
+*.log
+*.swp
+*.tmp
+.DS_Store
+Thumbs.db

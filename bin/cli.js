@@ -226,7 +226,7 @@ function cmdUse(version) {
 function linkCompose(target) {
   const composePath = path.join(SCRIPT_DIR, COMPOSE_FILE);
   
-  if (fs.existsSync(composePath) || fs.lstatSync(composePath)?.isSymbolicLink()) {
+  if (fs.existsSync(composePath)) {
     try {
       fs.unlinkSync(composePath);
     } catch (e) {
@@ -265,6 +265,32 @@ function cmdBuild() {
 }
 
 function cmdUp() {
+  const composePath = path.join(SCRIPT_DIR, COMPOSE_FILE);
+  
+  try {
+    if (fs.existsSync(composePath)) {
+      const composeContent = fs.readFileSync(composePath, 'utf8');
+      const imageMatch = composeContent.match(/image:\s*(\S+)/);
+      const dockerfileMatch = composeContent.match(/dockerfile:\s*(\S+)/);
+      
+      if (imageMatch) {
+        const imageName = imageMatch[1];
+        try {
+          execSync(`docker inspect ${imageName}`, { stdio: 'ignore' });
+        } catch (e) {
+          console.log('Image not found, building first...');
+          cmdBuild();
+        }
+      } else if (dockerfileMatch) {
+        console.log('Image not found, building first...');
+        cmdBuild();
+      }
+    }
+  } catch (e) {
+    console.log('Image not found, building first...');
+    cmdBuild();
+  }
+  
   runDockerCompose('up', ['-d']);
   console.log('Container started. Run \'docker-env-init exec\' to enter.');
 }
@@ -278,6 +304,24 @@ function cmdRun() {
 }
 
 function cmdExec() {
+  const composePath = path.join(SCRIPT_DIR, COMPOSE_FILE);
+  let containerName = 'dev-container';
+  
+  try {
+    if (fs.existsSync(composePath)) {
+      const composeContent = fs.readFileSync(composePath, 'utf8');
+      const match = composeContent.match(/container_name:\s*(\S+)/);
+      if (match) {
+        containerName = match[1];
+      }
+    }
+    
+    execSync(`docker inspect -f "{{.State.Running}}" ${containerName}`, { stdio: 'pipe' });
+  } catch (e) {
+    console.error('Container is not running. Run \'docker-env-init up\' first.');
+    process.exit(1);
+  }
+  
   try {
     runDockerCompose('exec', ['compile-env', 'bash'], { stdio: 'inherit' });
   } catch (e) {
@@ -317,18 +361,23 @@ function cmdCreate(name) {
 }
 
 function createCustomCompose(filePath) {
-  const content = `version: '3.8'
-
-services:
+  const content = `services:
   compile-env:
     build:
       context: .
       dockerfile: Dockerfile.22.04
+      args:
+        - HOST_UID=\${HOST_UID:-1000}
+        - HOST_GID=\${HOST_GID:-1000}
     image: ubuntu-compile-env:custom
     container_name: dev-container-custom
     volumes:
-      - ../workspace:/workspace
+      - ..:/workspace
     working_dir: /workspace
+    environment:
+      - TZ=Asia/Shanghai
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
     stdin_open: true
     tty: true
 `;
